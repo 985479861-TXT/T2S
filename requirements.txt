@@ -1,5 +1,6 @@
 numpy==2.4.6
 openai==2.43.0
+pyaudiowpatch==0.2.12.8
 pyttsx3==2.99
 scipy==1.18.0
 sounddevice==0.5.5
