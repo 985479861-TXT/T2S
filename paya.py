@@ -5,6 +5,7 @@ import sounddevice as sd
 import speech_recognition as sr
 from scipy.io import wavfile
 from openai import OpenAI
+import pyaudiowpatch as pyaudio
 
 # base set up
 engine = pyttsx3.init('sapi5')
@@ -64,7 +65,7 @@ def listenMP(sample_rate=16_000):
         while True:
             sd.sleep(100) # Keep the thread awake
 
-def ai(input, speak, key, train="You are a programming client handler."):
+def ai(input, speak, key, train="You are a programming client handler, handle the call with a client."):
     client = OpenAI(api_key=key)
 
     response = client.chat.completions.create(
@@ -79,5 +80,54 @@ def ai(input, speak, key, train="You are a programming client handler."):
     print(chatgpt_reply)
     speak(chatgpt_reply)
 
+def capture_pc():
+    print("Listening...")
+    with pyaudio.PyAudio() as p:
+        try:
+            default_speakers = p.get_default_wasapi_device()
+        except OSError:
+            return "Error: WASAPI audio devices not found. This requires Windows."
+        
+        loopback_idx = None
+        for device in p.get_device_info_generator():
+            if device["isLoopbackDevice"] and default_speakers["name"] in device["name"]:
+                loopback_idx = device["index"]
+                break
+                
+        if loopback_idx is None:
+            return "Error: Default loopback device could not be isolated."
+
+    recognizer = sr.Recognizer()
+    
+    # Adjust
+    recognizer.pause_threshold = 3.0 
+    
+    # Configure energy levels
+    recognizer.dynamic_energy_threshold = False 
+    recognizer.energy_threshold = 1000 
+
+    with sr.Microphone(device_index=loopback_idx) as source:
+        try:
+            # Adjusts for ambient noise baseline before capturing
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            
+            # Listen until a silence gap exceeding pause_threshold occurs
+            audio_data = recognizer.listen(source, timeout=None, phrase_time_limit=None)
+            
+            # Convert speech to text and return it
+            return recognizer.recognize_google(audio_data)
+            
+        except sr.UnknownValueError:
+            return "Error: System heard audio but it was unintelligible or just noise."
+        except sr.RequestError as e:
+            return f"Error: API connection issue ({e})"
+        except KeyboardInterrupt:
+            return "Error: Interrupted by user."
+
+
 if __name__ == "__main__":
-    pass
+    setvoice(i=0)
+    api = input("enter api key: ")
+    print("ctrl + C to quit")
+    while True:
+        ai(input=capture_pc, speak=speak, key=api)
